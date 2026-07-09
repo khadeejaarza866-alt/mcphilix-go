@@ -97,7 +97,7 @@ export function useErp() {
 }
 
 export const erp = {
-  async addRecipe(r: Omit<Recipe, "id">) {
+  async addRecipe(r: Omit<Recipe, "id">, onComplete?: () => void) {
     await supabase.from("recipes").insert([{
       name: r.name,
       selling_price: r.sellingPrice,
@@ -107,7 +107,48 @@ export const erp = {
       steps: r.steps,
       notes: r.notes
     }]);
+    if (onComplete) onComplete();
   },
+
+  async updateRecipe(id: string, patch: Partial<Recipe>, onComplete?: () => void) {
+    await supabase.from("recipes").update({
+      name: patch.name,
+      selling_price: patch.sellingPrice,
+      cost_price: patch.costPrice,
+      ingredients: patch.ingredients,
+      quantity: patch.quantity,
+      steps: patch.steps,
+      notes: patch.notes
+    }).eq("id", id);
+    if (onComplete) onComplete();
+  },
+
+  async addOrder(
+    o: Omit<Order, "id" | "createdAt" | "status" | "sellingPrice" | "costPrice">, 
+    currentRecipes: Recipe[],
+    onComplete?: () => void
+  ) {
+    const recipe = currentRecipes.find((r) => r.name === o.item);
+    await supabase.from("orders").insert([{
+      customer: o.customer,
+      phone: o.phone,
+      location: o.location,
+      item: o.item,
+      size: o.size,
+      note: o.note,
+      status: "Pending",
+      selling_price: recipe?.sellingPrice ?? 0,
+      cost_price: recipe?.costPrice ?? 0,
+      delivery_date: o.deliveryDate
+    }]);
+    if (onComplete) onComplete();
+  },
+
+  async updateOrderStatus(id: string, status: OrderStatus, onComplete?: () => void) {
+    await supabase.from("orders").update({ status }).eq("id", id);
+    if (onComplete) onComplete();
+  }
+};
 
   async updateRecipe(id: string, patch: Partial<Recipe>) {
     await supabase.from("recipes").update({
