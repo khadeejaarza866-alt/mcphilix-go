@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { admin } from "@/lib/admin-store";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/super-admin/login")({
   head: () => ({
