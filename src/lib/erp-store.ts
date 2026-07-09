@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "./supabase"; // Adjust if your client file path varies slightly
 
 export type Recipe = {
   id: string;
@@ -18,151 +19,134 @@ export type Order = {
   customer: string;
   phone: string;
   location: string;
-  item: string; // Recipe name
+  item: string;
   size: string;
-  deliveryDate: string; // ISO
-  createdAt: string; // ISO
+  deliveryDate: string;
+  createdAt: string;
   note?: string;
   status: OrderStatus;
-  sellingPrice: number; // snapshot? No — we recompute from recipe live per spec
+  sellingPrice: number;
   costPrice: number;
 };
 
-type State = {
-  recipes: Recipe[];
-  orders: Order[];
-  purchaseNotes: string;
-};
-
-const STORAGE_KEY = "mcphilix-erp-state-v1";
-
-const DEFAULT_RECIPES: Recipe[] = [
-  "Brownie",
-  "Assorted Brownie",
-  "Chocolate Cake",
-  "Black Forest Cake",
-  "Pineapple Cake",
-  "Red Velvet Cake",
-  "Vanilla Cake",
-  "Butterscotch Cake",
-  "White Forest Cake",
-  "Blueberry Cake",
-  "Lotus Biscoff Cake",
-  "Ferrero Rocher Cake",
-  "KitKat Cake",
-  "Oreo Cake",
-  "Fresh Cream Cake",
-  "Cupcakes",
-  "Bento Cake",
-  "Cake Pops",
-  "Cookies",
-  "Donuts",
-].map((name, i) => ({
-  id: `r-${i + 1}`,
-  name,
-  sellingPrice: 0,
-  costPrice: 0,
-  ingredients: "",
-  quantity: "",
-  steps: "",
-  notes: "",
-}));
-
-const initialState: State = {
-  recipes: DEFAULT_RECIPES,
-  orders: [],
-  purchaseNotes: "",
-};
-
-let state: State = load();
-const listeners = new Set<() => void>();
-
-function load(): State {
-  if (typeof window === "undefined") return initialState;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return initialState;
-    const parsed = JSON.parse(raw) as Partial<State>;
-    return {
-      recipes: parsed.recipes?.length ? parsed.recipes : DEFAULT_RECIPES,
-      orders: parsed.orders ?? [],
-      purchaseNotes: parsed.purchaseNotes ?? "",
-    };
-  } catch {
-    return initialState;
-  }
-}
-
-function persist() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
-}
-
-function setState(updater: (prev: State) => State) {
-  state = updater(state);
-  persist();
-  listeners.forEach((l) => l());
-}
-
-const subscribe = (l: () => void) => {
-  listeners.add(l);
-  return () => listeners.delete(l);
-};
-
-const getSnapshot = () => state;
-const getServerSnapshot = () => initialState;
-
+// Unified hook replacing useSyncExternalStore with real-time Supabase fetches
 export function useErp() {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function fetchData() {
+    try {
+      // 1. Fetch current logged-in user session
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 2. Fetch authenticated user's recipes
+      const { data: recipesData } = await supabase
+        .from("recipes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      // 3. Fetch authenticated user's orders
+      const { data: ordersData } = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (recipesData) {
+        setRecipes(
+          recipesData.map((r) => ({
+            id: r.id,
+            name: r.name,
+            sellingPrice: Number(r.selling_price),
+            costPrice: Number(r.cost_price),
+            ingredients: r.ingredients || "",
+            quantity: r.quantity || "",
+            steps: r.steps || "",
+            notes: r.notes || "",
+          }))
+        );
+      }
+
+      if (ordersData) {
+        setOrders(
+          ordersData.map((o) => ({
+            id: o.id,
+            customer: o.customer,
+            phone: o.phone || "",
+            location: o.location || "",
+            item: o.item,
+            size: o.size || "",
+            deliveryDate: o.delivery_date || "",
+            createdAt: o.created_at,
+            note: o.note,
+            status: o.status as OrderStatus,
+            sellingPrice: Number(o.selling_price),
+            costPrice: Number(o.cost_price),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("Error pulling database profiles:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  return { recipes, orders, loading, refresh: fetchData };
 }
 
-// Actions
+// Global mutations utilizing the configured Supabase RLS profiles
 export const erp = {
-  addRecipe(r: Omit<Recipe, "id">) {
-    setState((s) => ({
-      ...s,
-      recipes: [{ ...r, id: `r-${Date.now()}` }, ...s.recipes],
-    }));
+  async addRecipe(r: Omit<Recipe, "id">) {
+    await supabase.from("recipes").insert([{
+      name: r.name,
+      selling_price: r.sellingPrice,
+      cost_price: r.costPrice,
+      ingredients: r.ingredients,
+      quantity: r.quantity,
+      steps: r.steps,
+      notes: r.notes
+    }]);
   },
-  updateRecipe(id: string, patch: Partial<Recipe>) {
-    setState((s) => ({
-      ...s,
-      recipes: s.recipes.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    }));
+
+  async updateRecipe(id: string, patch: Partial<Recipe>) {
+    await supabase.from("recipes").update({
+      name: patch.name,
+      selling_price: patch.sellingPrice,
+      cost_price: patch.costPrice,
+      ingredients: patch.ingredients,
+      quantity: patch.quantity,
+      steps: patch.steps,
+      notes: patch.notes
+    }).eq("id", id);
   },
-  addOrder(o: Omit<Order, "id" | "createdAt" | "status" | "sellingPrice" | "costPrice">) {
-    const recipe = state.recipes.find((r) => r.name === o.item);
-    setState((s) => ({
-      ...s,
-      orders: [
-        {
-          ...o,
-          id: `O-${Date.now().toString().slice(-6)}`,
-          createdAt: new Date().toISOString(),
-          status: "Pending",
-          sellingPrice: recipe?.sellingPrice ?? 0,
-          costPrice: recipe?.costPrice ?? 0,
-        },
-        ...s.orders,
-      ],
-    }));
+
+  async addOrder(o: Omit<Order, "id" | "createdAt" | "status" | "sellingPrice" | "costPrice">, currentRecipes: Recipe[]) {
+    const recipe = currentRecipes.find((r) => r.name === o.item);
+    await supabase.from("orders").insert([{
+      customer: o.customer,
+      phone: o.phone,
+      location: o.location,
+      item: o.item,
+      size: o.size,
+      note: o.note,
+      status: "Pending",
+      selling_price: recipe?.sellingPrice ?? 0,
+      cost_price: recipe?.costPrice ?? 0,
+      delivery_date: o.deliveryDate
+    }]);
   },
-  updateOrderStatus(id: string, status: OrderStatus) {
-    setState((s) => ({
-      ...s,
-      orders: s.orders.map((o) => (o.id === id ? { ...o, status } : o)),
-    }));
-  },
-  setPurchaseNotes(notes: string) {
-    setState((s) => ({ ...s, purchaseNotes: notes }));
-  },
+
+  async updateOrderStatus(id: string, status: OrderStatus) {
+    await supabase.from("orders").update({ status }).eq("id", id);
+  }
 };
 
-// Helper: get live selling/cost from current recipe (falls back to snapshot)
 export function priceOf(recipes: Recipe[], order: Order) {
   const r = recipes.find((x) => x.name === order.item);
   const selling = r ? r.sellingPrice : order.sellingPrice;
