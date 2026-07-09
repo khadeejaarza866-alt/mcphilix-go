@@ -226,25 +226,26 @@ function CreateAccountDialog({
     setPassword("");
   };
 
-  const submit = () => {
-    if (!businessName.trim() || !username.trim() || !password.trim()) {
-      toast.error("Business Name, Client Username and Client Password are required");
-      return;
-    }
-    try {
-      admin.createAccount({
-        businessName: businessName.trim(),
-        username: username.trim(),
-        password,
-      });
-      onOpenChange(false);
-      reset();
-      toast.success("Client created — 30 days of access granted");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
+const submit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: username,
+    password: password,
+  });
+
+  if (error) {
+    toast.error(error.message);
+    return;
+  }
+
+  // Force the app to wait briefly to register the session
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  toast.success("Welcome, Super Admin");
+  navigate({ to: "/super-admin/client-control" });
+};
+  
   return (
     <Dialog
       open={open}
