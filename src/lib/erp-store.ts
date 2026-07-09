@@ -36,9 +36,7 @@ export function useErp() {
 
   async function fetchData() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
+      // Login check removed so data loads freely with RLS disabled
       const { data: recipesData } = await supabase
         .from("recipes")
         .select("*")
@@ -98,7 +96,7 @@ export function useErp() {
 
 export const erp = {
   async addRecipe(r: Omit<Recipe, "id">, onComplete?: () => void) {
-    await supabase.from("recipes").insert([{
+    const { error } = await supabase.from("recipes").insert([{
       name: r.name,
       selling_price: r.sellingPrice,
       cost_price: r.costPrice,
@@ -107,11 +105,16 @@ export const erp = {
       steps: r.steps,
       notes: r.notes
     }]);
-    if (onComplete) onComplete();
+    
+    if (error) {
+      alert("Database Error adding recipe: " + error.message);
+    } else if (onComplete) {
+      onComplete();
+    }
   },
 
   async updateRecipe(id: string, patch: Partial<Recipe>, onComplete?: () => void) {
-    await supabase.from("recipes").update({
+    const { error } = await supabase.from("recipes").update({
       name: patch.name,
       selling_price: patch.sellingPrice,
       cost_price: patch.costPrice,
@@ -120,7 +123,12 @@ export const erp = {
       steps: patch.steps,
       notes: patch.notes
     }).eq("id", id);
-    if (onComplete) onComplete();
+    
+    if (error) {
+      alert("Database Error updating recipe: " + error.message);
+    } else if (onComplete) {
+      onComplete();
+    }
   },
 
   async addOrder(
@@ -129,7 +137,7 @@ export const erp = {
     onComplete?: () => void
   ) {
     const recipe = currentRecipes?.find((r) => r.name === o.item);
-    await supabase.from("orders").insert([{
+    const { error } = await supabase.from("orders").insert([{
       customer: o.customer,
       phone: o.phone,
       location: o.location,
@@ -141,12 +149,22 @@ export const erp = {
       cost_price: recipe?.costPrice ?? 0,
       delivery_date: o.deliveryDate
     }]);
-    if (onComplete) onComplete();
+    
+    if (error) {
+      alert("Database Error adding order: " + error.message);
+    } else if (onComplete) {
+      onComplete();
+    }
   },
 
   async updateOrderStatus(id: string, status: OrderStatus, onComplete?: () => void) {
-    await supabase.from("orders").update({ status }).eq("id", id);
-    if (onComplete) onComplete();
+    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+    
+    if (error) {
+      alert("Database Error changing status: " + error.message);
+    } else if (onComplete) {
+      onComplete();
+    }
   }
 };
 
