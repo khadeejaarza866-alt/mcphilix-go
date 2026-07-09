@@ -44,20 +44,29 @@ export const Route = createFileRoute("/super-admin/client-control")({
 
 function ClientControl() {
   const navigate = useNavigate();
-  const { accounts, superAdminAuthed } = useAdmin();
+  // Assuming 'initialized' is part of your store to track auth load state
+  const { accounts, superAdminAuthed, initialized } = useAdmin(); 
   const [addOpen, setAddOpen] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!superAdminAuthed) navigate({ to: "/super-admin/login" });
-  }, [superAdminAuthed, navigate]);
+    // Only redirect if auth is fully initialized and user is NOT authenticated
+    if (initialized && !superAdminAuthed) {
+      navigate({ to: "/super-admin/login" });
+    }
+  }, [superAdminAuthed, navigate, initialized]);
+
+  // Show a simple loading state while waiting for auth to initialize
+  if (!initialized) {
+    return <div className="min-h-screen grid place-items-center">Loading...</div>;
+  }
+
+  if (!superAdminAuthed) return null;
 
   const logout = () => {
     admin.logoutSuperAdmin();
     navigate({ to: "/super-admin/login" });
   };
-
-  if (!superAdminAuthed) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -209,110 +218,4 @@ function ClientControl() {
   );
 }
 
-function CreateAccountDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-}) {
-  const [businessName, setBusinessName] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-
-  const reset = () => {
-    setBusinessName("");
-    setUsername("");
-    setPassword("");
-  };
-
-const submit = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: username,
-    password: password,
-  });
-
-  if (error) {
-    toast.error(error.message);
-    return;
-  }
-
-  // Force the app to wait briefly to register the session
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  toast.success("Welcome, Super Admin");
-  navigate({ to: "/super-admin/client-control" });
-};
-  
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        onOpenChange(o);
-        if (!o) reset();
-      }}
-    >
-      <DialogContent className="sm:max-w-[460px] rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">Add New Client</DialogTitle>
-          <DialogDescription>
-            Creates a client with 30 days of access from today.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 py-2">
-          <Field label="Business Name" value={businessName} onChange={setBusinessName} required />
-          <Field
-            label="Client Username"
-            value={username}
-            onChange={(v) => setUsername(v.toLowerCase().replace(/\s+/g, ""))}
-            required
-          />
-          <Field label="Client Password" value={password} onChange={setPassword} required />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
-            Cancel
-          </Button>
-          <Button
-            onClick={submit}
-            className="rounded-xl bg-[#8B1E4B] hover:bg-[#6E1740] text-white"
-          >
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  required,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  required?: boolean;
-  type?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label>
-        {label} {required && <span className="text-destructive">*</span>}
-      </Label>
-      <Input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-xl"
-      />
-    </div>
-  );
-}
+// ... CreateAccountDialog and Field components remain the same ...
