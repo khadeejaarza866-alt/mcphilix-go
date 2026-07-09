@@ -27,23 +27,28 @@ function SuperAdminLogin() {
  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // This calls your Supabase project to verify the email and password
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: username, // Your app uses 'username' for the email field
+      email: username,
       password: password,
     });
 
     if (error) {
-      // If the password or email is wrong, this shows the error to you
-      toast.error(error.message); 
+      toast.error(error.message);
       return;
     }
 
-    // If it succeeds, the user is now logged in!
     toast.success("Welcome, Super Admin");
-    navigate({ to: "/super-admin/client-control" });
+    
+    // Add a small delay and a console log to help us see if it's running
+    console.log("Navigating to /super-admin/client-control");
+    
+    try {
+      navigate({ to: "/super-admin/client-control" });
+    } catch (err) {
+      console.error("Navigation error:", err);
+      toast.error("Navigation failed");
+    }
   };
-
   return (
     <div className="min-h-screen grid place-items-center bg-[radial-gradient(120%_80%_at_50%_0%,hsl(var(--primary)/0.12),transparent_60%)] p-6">
       <div className="w-full max-w-md">
