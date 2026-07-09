@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { admin } from "@/lib/admin-store";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
 
 export const Route = createFileRoute("/super-admin/login")({
   head: () => ({
@@ -23,12 +24,22 @@ function SuperAdminLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+ const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!admin.loginSuperAdmin(username.trim(), password)) {
-      toast.error("Invalid super admin credentials");
+
+    // This calls your Supabase project to verify the email and password
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: username, // Your app uses 'username' for the email field
+      password: password,
+    });
+
+    if (error) {
+      // If the password or email is wrong, this shows the error to you
+      toast.error(error.message); 
       return;
     }
+
+    // If it succeeds, the user is now logged in!
     toast.success("Welcome, Super Admin");
     navigate({ to: "/super-admin/client-control" });
   };
